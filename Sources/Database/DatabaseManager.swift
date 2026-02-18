@@ -12,9 +12,6 @@ final class DatabaseManager: Sendable {
         let dbPath = dbDir.appendingPathComponent("agent-os.db").path
         var config = Configuration()
         config.foreignKeysEnabled = true
-        config.prepareDatabase { db in
-            db.trace { print("SQL: \($0)") }
-        }
 
         dbPool = try DatabasePool(path: dbPath, configuration: config)
 
@@ -24,22 +21,21 @@ final class DatabaseManager: Sendable {
     private var migrator: DatabaseMigrator {
         var migrator = DatabaseMigrator()
 
-        // Initial schema — corresponds to createSchema() in the TypeScript codebase
+        // v1: Initial schema — matches createSchema() in lib/db/schema.ts
+        // Includes columns from the base schema only (no migration-added columns yet)
         migrator.registerMigration("v1_initial_schema") { db in
-            // Sessions table
+            // Sessions table (base columns only — matches TS schema.ts lines 6-20)
             try db.create(table: "sessions", ifNotExists: true) { t in
                 t.primaryKey("id", .text)
                 t.column("name", .text).notNull()
-                t.column("created_at", .text).notNull().defaults(sql: "datetime('now')")
-                t.column("updated_at", .text).notNull().defaults(sql: "datetime('now')")
+                t.column("created_at", .text).notNull().defaults(sql: "(datetime('now'))")
+                t.column("updated_at", .text).notNull().defaults(sql: "(datetime('now'))")
                 t.column("status", .text).notNull().defaults(to: "idle")
                 t.column("working_directory", .text).notNull().defaults(to: "~")
-                t.column("parent_session_id", .text).references("sessions", onDelete: .setNull)
+                t.column("parent_session_id", .text).references("sessions")
                 t.column("claude_session_id", .text)
                 t.column("model", .text).defaults(to: "sonnet")
                 t.column("system_prompt", .text)
-                t.column("group_path", .text).notNull().defaults(to: "sessions")
-                t.column("agent_type", .text).notNull().defaults(to: "claude")
             }
 
             // Groups table
@@ -48,7 +44,7 @@ final class DatabaseManager: Sendable {
                 t.column("name", .text).notNull()
                 t.column("expanded", .integer).notNull().defaults(to: 1)
                 t.column("sort_order", .integer).notNull().defaults(to: 0)
-                t.column("created_at", .text).notNull().defaults(sql: "datetime('now')")
+                t.column("created_at", .text).notNull().defaults(sql: "(datetime('now'))")
             }
 
             // Default group
@@ -60,7 +56,7 @@ final class DatabaseManager: Sendable {
                 t.column("session_id", .text).notNull().references("sessions", onDelete: .cascade)
                 t.column("role", .text).notNull()
                 t.column("content", .text).notNull()
-                t.column("timestamp", .text).notNull().defaults(sql: "datetime('now')")
+                t.column("timestamp", .text).notNull().defaults(sql: "(datetime('now'))")
                 t.column("duration_ms", .integer)
             }
 
@@ -73,23 +69,17 @@ final class DatabaseManager: Sendable {
                 t.column("tool_input", .text).notNull()
                 t.column("tool_result", .text)
                 t.column("status", .text).notNull().defaults(to: "pending")
-                t.column("timestamp", .text).notNull().defaults(sql: "datetime('now')")
+                t.column("timestamp", .text).notNull().defaults(sql: "(datetime('now'))")
             }
 
-            // Dev servers table
+            // Dev servers table (base columns — no type/name/command/pid/working_directory yet)
             try db.create(table: "dev_servers", ifNotExists: true) { t in
                 t.primaryKey("id", .text)
-                t.column("project_id", .text).notNull()
-                t.column("type", .text).notNull().defaults(to: "node")
-                t.column("name", .text).notNull().defaults(to: "")
-                t.column("command", .text).notNull().defaults(to: "")
                 t.column("status", .text).notNull().defaults(to: "stopped")
-                t.column("pid", .integer)
                 t.column("container_id", .text)
                 t.column("ports", .text).notNull().defaults(to: "[]")
-                t.column("working_directory", .text).notNull().defaults(to: "")
-                t.column("created_at", .text).notNull().defaults(sql: "datetime('now')")
-                t.column("updated_at", .text).notNull().defaults(sql: "datetime('now')")
+                t.column("created_at", .text).notNull().defaults(sql: "(datetime('now'))")
+                t.column("updated_at", .text).notNull().defaults(sql: "(datetime('now'))")
             }
 
             // Projects table
@@ -99,12 +89,11 @@ final class DatabaseManager: Sendable {
                 t.column("working_directory", .text).notNull()
                 t.column("agent_type", .text).notNull().defaults(to: "claude")
                 t.column("default_model", .text).notNull().defaults(to: "sonnet")
-                t.column("initial_prompt", .text)
                 t.column("expanded", .integer).notNull().defaults(to: 1)
                 t.column("sort_order", .integer).notNull().defaults(to: 0)
                 t.column("is_uncategorized", .integer).notNull().defaults(to: 0)
-                t.column("created_at", .text).notNull().defaults(sql: "datetime('now')")
-                t.column("updated_at", .text).notNull().defaults(sql: "datetime('now')")
+                t.column("created_at", .text).notNull().defaults(sql: "(datetime('now'))")
+                t.column("updated_at", .text).notNull().defaults(sql: "(datetime('now'))")
             }
 
             // Project dev servers (configuration templates)
@@ -119,30 +108,12 @@ final class DatabaseManager: Sendable {
                 t.column("sort_order", .integer).notNull().defaults(to: 0)
             }
 
-            // Project repositories
-            try db.create(table: "project_repositories", ifNotExists: true) { t in
-                t.primaryKey("id", .text)
-                t.column("project_id", .text).notNull().references("projects", onDelete: .cascade)
-                t.column("name", .text).notNull()
-                t.column("path", .text).notNull()
-                t.column("is_primary", .integer).notNull().defaults(to: 0)
-                t.column("sort_order", .integer).notNull().defaults(to: 0)
-            }
-
-            // Add foreign key from dev_servers to projects now that projects table exists
-            // (SQLite doesn't enforce FK creation order within same migration)
-
-            // Indexes
-            try db.create(indexOn: "messages", columns: ["session_id"], ifNotExists: true)
-            try db.create(indexOn: "tool_calls", columns: ["session_id"], ifNotExists: true)
-            try db.create(indexOn: "tool_calls", columns: ["message_id"], ifNotExists: true)
-            try db.create(indexOn: "sessions", columns: ["parent_session_id"], ifNotExists: true)
-            try db.create(indexOn: "project_dev_servers", columns: ["project_id"], ifNotExists: true)
-            try db.create(indexOn: "project_repositories", columns: ["project_id"], ifNotExists: true)
-            try db.create(indexOn: "sessions", columns: ["project_id"], ifNotExists: true)
-            try db.create(indexOn: "sessions", columns: ["group_path"], ifNotExists: true)
-            try db.create(indexOn: "sessions", columns: ["conductor_session_id"], ifNotExists: true)
-            try db.create(indexOn: "dev_servers", columns: ["project_id"], ifNotExists: true)
+            // Indexes for base columns only
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id)")
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_tool_calls_session ON tool_calls(session_id)")
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_tool_calls_message ON tool_calls(message_id)")
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_sessions_parent ON sessions(parent_session_id)")
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_project_dev_servers_project ON project_dev_servers(project_id)")
 
             // Default Uncategorized project
             try db.execute(sql: """
@@ -151,57 +122,130 @@ final class DatabaseManager: Sendable {
             """)
         }
 
-        // Migration 3: Worktree columns (migrations 1-2 from TS are in initial schema)
-        migrator.registerMigration("v2_worktree_columns") { db in
-            if try !db.columns(in: "sessions").contains(where: { $0.name == "worktree_path" }) {
-                try db.alter(table: "sessions") { t in
-                    t.add(column: "worktree_path", .text)
-                    t.add(column: "branch_name", .text)
-                    t.add(column: "base_branch", .text)
-                    t.add(column: "dev_server_port", .integer)
-                }
+        // TS migration 1: add group_path to sessions
+        migrator.registerMigration("v2_add_group_path") { db in
+            try db.alter(table: "sessions") { t in
+                t.add(column: "group_path", .text).notNull().defaults(to: "sessions")
+            }
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_sessions_group ON sessions(group_path)")
+        }
+
+        // TS migration 2: add agent_type to sessions
+        migrator.registerMigration("v3_add_agent_type") { db in
+            try db.alter(table: "sessions") { t in
+                t.add(column: "agent_type", .text).notNull().defaults(to: "claude")
             }
         }
 
-        // Migration 4: PR tracking
-        migrator.registerMigration("v3_pr_tracking") { db in
-            if try !db.columns(in: "sessions").contains(where: { $0.name == "pr_url" }) {
-                try db.alter(table: "sessions") { t in
-                    t.add(column: "pr_url", .text)
-                    t.add(column: "pr_number", .integer)
-                    t.add(column: "pr_status", .text)
-                }
+        // TS migration 3: add worktree columns to sessions
+        migrator.registerMigration("v4_worktree_columns") { db in
+            try db.alter(table: "sessions") { t in
+                t.add(column: "worktree_path", .text)
+                t.add(column: "branch_name", .text)
+                t.add(column: "base_branch", .text)
+                t.add(column: "dev_server_port", .integer)
             }
         }
 
-        // Migration 6: Orchestration
-        migrator.registerMigration("v4_orchestration") { db in
-            if try !db.columns(in: "sessions").contains(where: { $0.name == "conductor_session_id" }) {
-                try db.alter(table: "sessions") { t in
-                    t.add(column: "conductor_session_id", .text).references("sessions")
-                    t.add(column: "worker_task", .text)
-                    t.add(column: "worker_status", .text)
-                }
+        // TS migration 4: add PR tracking to sessions
+        migrator.registerMigration("v5_pr_tracking") { db in
+            try db.alter(table: "sessions") { t in
+                t.add(column: "pr_url", .text)
+                t.add(column: "pr_number", .integer)
+                t.add(column: "pr_status", .text)
             }
         }
 
-        // Migration 7: Auto approve
-        migrator.registerMigration("v5_auto_approve") { db in
-            if try !db.columns(in: "sessions").contains(where: { $0.name == "auto_approve" }) {
-                try db.alter(table: "sessions") { t in
-                    t.add(column: "auto_approve", .integer).notNull().defaults(to: 0)
-                }
+        // TS migration 5: add group_path index (already created in v2, safe with IF NOT EXISTS)
+        migrator.registerMigration("v6_group_path_index") { db in
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_sessions_group ON sessions(group_path)")
+        }
+
+        // TS migration 6: add orchestration columns to sessions
+        migrator.registerMigration("v7_orchestration") { db in
+            try db.alter(table: "sessions") { t in
+                t.add(column: "conductor_session_id", .text).references("sessions")
+                t.add(column: "worker_task", .text)
+                t.add(column: "worker_status", .text)
+            }
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_sessions_conductor ON sessions(conductor_session_id)")
+        }
+
+        // TS migration 7: add auto_approve to sessions
+        migrator.registerMigration("v8_auto_approve") { db in
+            try db.alter(table: "sessions") { t in
+                t.add(column: "auto_approve", .integer).notNull().defaults(to: 0)
             }
         }
 
-        // Migration 11: tmux name
-        migrator.registerMigration("v6_tmux_name") { db in
-            if try !db.columns(in: "sessions").contains(where: { $0.name == "tmux_name" }) {
-                try db.alter(table: "sessions") { t in
-                    t.add(column: "tmux_name", .text)
-                }
-                try db.execute(sql: "UPDATE sessions SET tmux_name = agent_type || '-' || id WHERE tmux_name IS NULL")
+        // TS migration 8: add dev_server columns
+        migrator.registerMigration("v9_dev_server_columns") { db in
+            try db.alter(table: "dev_servers") { t in
+                t.add(column: "type", .text).notNull().defaults(to: "node")
+                t.add(column: "name", .text).notNull().defaults(to: "")
+                t.add(column: "command", .text).notNull().defaults(to: "")
+                t.add(column: "pid", .integer)
+                t.add(column: "working_directory", .text).notNull().defaults(to: "")
             }
+        }
+
+        // TS migration 9: add project_id to sessions + backfill
+        migrator.registerMigration("v10_session_project_id") { db in
+            try db.alter(table: "sessions") { t in
+                t.add(column: "project_id", .text).references("projects")
+            }
+            try db.execute(sql: "UPDATE sessions SET project_id = 'uncategorized' WHERE project_id IS NULL")
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id)")
+        }
+
+        // TS migration 10: add project_id to dev_servers + backfill
+        migrator.registerMigration("v11_dev_server_project_id") { db in
+            try db.alter(table: "dev_servers") { t in
+                t.add(column: "project_id", .text).references("projects", onDelete: .cascade)
+            }
+            // Migrate from session_id if it exists
+            let cols = try db.columns(in: "dev_servers")
+            if cols.contains(where: { $0.name == "session_id" }) {
+                try db.execute(sql: """
+                    UPDATE dev_servers
+                    SET project_id = (
+                        SELECT COALESCE(s.project_id, 'uncategorized')
+                        FROM sessions s
+                        WHERE s.id = dev_servers.session_id
+                    )
+                    WHERE project_id IS NULL
+                """)
+            }
+            try db.execute(sql: "UPDATE dev_servers SET project_id = 'uncategorized' WHERE project_id IS NULL")
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_dev_servers_project ON dev_servers(project_id)")
+        }
+
+        // TS migration 11: add tmux_name to sessions + backfill
+        migrator.registerMigration("v12_tmux_name") { db in
+            try db.alter(table: "sessions") { t in
+                t.add(column: "tmux_name", .text)
+            }
+            try db.execute(sql: "UPDATE sessions SET tmux_name = agent_type || '-' || id WHERE tmux_name IS NULL")
+        }
+
+        // TS migration 12: add initial_prompt to projects
+        migrator.registerMigration("v13_initial_prompt") { db in
+            try db.alter(table: "projects") { t in
+                t.add(column: "initial_prompt", .text)
+            }
+        }
+
+        // TS migration 13: add project_repositories table
+        migrator.registerMigration("v14_project_repositories") { db in
+            try db.create(table: "project_repositories", ifNotExists: true) { t in
+                t.primaryKey("id", .text)
+                t.column("project_id", .text).notNull().references("projects", onDelete: .cascade)
+                t.column("name", .text).notNull()
+                t.column("path", .text).notNull()
+                t.column("is_primary", .integer).notNull().defaults(to: 0)
+                t.column("sort_order", .integer).notNull().defaults(to: 0)
+            }
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_project_repositories_project ON project_repositories(project_id)")
         }
 
         return migrator
@@ -230,8 +274,8 @@ final class DatabaseManager: Sendable {
         }
     }
 
-    func createSession(name: String, projectId: String, workingDirectory: String = "~") throws -> Session {
-        var session = Session.new(name: name, projectId: projectId, workingDirectory: workingDirectory)
+    func createSession(name: String, projectId: String, workingDirectory: String = "~", agentType: AgentType = .claude) throws -> Session {
+        let session = Session.new(name: name, projectId: projectId, workingDirectory: workingDirectory, agentType: agentType)
         try dbPool.write { db in
             try session.insert(db)
         }
@@ -275,7 +319,7 @@ final class DatabaseManager: Sendable {
     }
 
     func createProject(name: String, workingDirectory: String) throws -> Project {
-        var project = Project.new(name: name, workingDirectory: workingDirectory)
+        let project = Project.new(name: name, workingDirectory: workingDirectory)
         try dbPool.write { db in
             try project.insert(db)
         }
@@ -318,6 +362,14 @@ final class DatabaseManager: Sendable {
             try DevServer
                 .filter(DevServer.Columns.projectId == projectId)
                 .fetchAll(db)
+        }
+    }
+
+    // MARK: - Group Queries
+
+    func fetchAllGroups() throws -> [Group] {
+        try dbPool.read { db in
+            try Group.order(Group.Columns.sortOrder.asc).fetchAll(db)
         }
     }
 }

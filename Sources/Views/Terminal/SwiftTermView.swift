@@ -55,15 +55,11 @@ struct SwiftTermView: NSViewRepresentable {
     }
 
     private func applyTheme(to terminalView: LocalProcessTerminalView, theme: TerminalTheme) {
-        let terminal = terminalView.getTerminal()
-
-        // Set ANSI colors
+        // Apply ANSI 0-15 color palette
         let colors = theme.ansiColors
-        for (index, color) in colors.enumerated() {
-            terminal.installColors(colors: [color], firstColorIndex: index)
-        }
+        terminalView.installColors(colors)
 
-        // Set foreground/background
+        // Set foreground/background/cursor/selection
         terminalView.nativeForegroundColor = theme.foreground
         terminalView.nativeBackgroundColor = theme.background
         terminalView.caretColor = theme.cursor

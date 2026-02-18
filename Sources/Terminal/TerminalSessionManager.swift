@@ -50,7 +50,7 @@ final class TerminalInstance {
     var environment: [String] {
         let env = ProcessInfo.processInfo.environment
         return [
-            "PATH=\(env["PATH"] ?? "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin")",
+            "PATH=\(env["PATH"] ?? "/usr/local/bin:/usr/bin:/bin")",
             "HOME=\(env["HOME"] ?? "/")",
             "USER=\(env["USER"] ?? "")",
             "SHELL=\(shell)",

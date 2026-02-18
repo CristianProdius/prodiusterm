@@ -25,13 +25,10 @@ struct ProdiusTermCommands: Commands {
 
         CommandGroup(replacing: .sidebar) {
             Button("Toggle Sidebar") {
-                withAnimation {
-                    // Toggle via NSApp
-                    NSApp.keyWindow?.contentViewController?.tryToPerform(
-                        #selector(NSSplitViewController.toggleSidebar(_:)),
-                        with: nil
-                    )
-                }
+                NSApp.keyWindow?.contentViewController?.tryToPerform(
+                    #selector(NSSplitViewController.toggleSidebar(_:)),
+                    with: nil
+                )
             }
             .keyboardShortcut("s", modifiers: [.command, .control])
         }

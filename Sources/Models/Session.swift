@@ -8,14 +8,17 @@ enum SessionStatus: String, Codable, DatabaseValueConvertible {
     case error
 }
 
+/// Matches PROVIDER_IDS from lib/providers/registry.ts exactly
 enum AgentType: String, Codable, DatabaseValueConvertible {
     case claude
-    case aider
-    case opencode = "open-code"
     case codex
+    case opencode
+    case gemini
+    case aider
     case cursor
-    case copilot
-    case custom
+    case amp
+    case pi
+    case shell
 }
 
 enum PRStatus: String, Codable, DatabaseValueConvertible {
@@ -34,7 +37,7 @@ enum WorkerStatus: String, Codable, DatabaseValueConvertible {
 struct Session: Identifiable, Codable, Equatable, Hashable {
     var id: String
     var name: String
-    var tmuxName: String?
+    var tmuxName: String
     var createdAt: String
     var updatedAt: String
     var status: SessionStatus
@@ -115,13 +118,13 @@ extension Session: FetchableRecord, PersistableRecord {
         case workerStatus = "worker_status"
     }
 
-    static func new(name: String, projectId: String = "uncategorized", workingDirectory: String = "~") -> Session {
+    static func new(name: String, projectId: String = "uncategorized", workingDirectory: String = "~", agentType: AgentType = .claude) -> Session {
         let id = UUID().uuidString.lowercased()
         let now = ISO8601DateFormatter().string(from: Date())
         return Session(
             id: id,
             name: name,
-            tmuxName: "claude-\(id)",
+            tmuxName: "\(agentType.rawValue)-\(id)",
             createdAt: now,
             updatedAt: now,
             status: .idle,
@@ -129,7 +132,7 @@ extension Session: FetchableRecord, PersistableRecord {
             model: "sonnet",
             groupPath: "sessions",
             projectId: projectId,
-            agentType: .claude,
+            agentType: agentType,
             autoApprove: false
         )
     }

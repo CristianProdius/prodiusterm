@@ -1,30 +1,22 @@
-# Dependencies
-node_modules/
+# Swift / Xcode
+.build/
+.swiftpm/
+xcuserdata/
+DerivedData/
+*.xcodeproj
 
-# Build output
-dist/
-.next/
-out/
-src-tauri/server-bundle/
+# OS
+.DS_Store
 
 # Environment
 .env
 .env.local
 .env*.local
-.env.signing
 
-# Python
-__pycache__/
-*.pyc
-.venv/
-venv/
-
-# OS
-.DS_Store
-
-# Logs
-*.log
-npm-debug.log*
+# Databases (local working copies)
+agent-os.db
+agent-os.db-wal
+agent-os.db-shm
 
 # IDE
 .idea/
@@ -32,33 +24,5 @@ npm-debug.log*
 *.swp
 *.swo
 
-# Testing
-coverage/
-.cache/
-
-# Databases (local working copies)
-.mem.db
-.mem.db-wal
-.mem.db-shm
-agent-os.db
-agent-os.db-wal
-agent-os.db-shm
-
-# TypeScript
-*.tsbuildinfo
-
-# Vercel
-.vercel
-
-# Local docs/plans (but allow docs/setup and docs/issues for public docs)
-docs/*
-!docs/setup/
-!docs/issues/
-.mcp.json
-.git-evening
-
-# Private development notes (open source repo)
-CLAUDE.md
-master.md
-progress.md
-.git-evening
+# Logs
+*.log
