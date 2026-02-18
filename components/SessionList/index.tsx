@@ -40,6 +40,7 @@ export function SessionList({
   onOpenTerminal,
   onStartDevServer,
   onCreateDevServer,
+  onOpenWorkspace,
 }: SessionListProps) {
   const { isMobile } = useViewport();
 
@@ -266,6 +267,7 @@ export function SessionList({
                 hoverHandlers.onHoverStart(session, rect)
               }
               onHoverEnd={hoverHandlers.onHoverEnd}
+              onOpenWorkspace={onOpenWorkspace}
             />
           )}
 

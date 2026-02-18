@@ -54,7 +54,7 @@ export function createPaneData(): PaneData {
   };
 }
 
-export const MAX_PANES = 4;
+export const MAX_PANES = 6;
 
 // Generate unique pane ID
 export function generatePaneId(): string {
@@ -69,6 +69,51 @@ export function createInitialPaneState(): PaneState {
     focusedPaneId: paneId,
     panes: {
       [paneId]: createPaneData(),
+    },
+  };
+}
+
+// Create workspace layout: Server (top-left) + 2 Claude panes (right) + shell (bottom-left)
+export function createWorkspaceLayout(): PaneState {
+  const serverPane = generatePaneId();
+  const shellPane = generatePaneId();
+  const claudePane1 = generatePaneId();
+  const claudePane2 = generatePaneId();
+
+  const layout: PaneLayoutSplit = {
+    type: "split",
+    direction: "horizontal",
+    children: [
+      {
+        type: "split",
+        direction: "vertical",
+        children: [
+          { type: "leaf", paneId: serverPane },
+          { type: "leaf", paneId: shellPane },
+        ],
+        sizes: [60, 40],
+      },
+      {
+        type: "split",
+        direction: "vertical",
+        children: [
+          { type: "leaf", paneId: claudePane1 },
+          { type: "leaf", paneId: claudePane2 },
+        ],
+        sizes: [50, 50],
+      },
+    ],
+    sizes: [40, 60],
+  };
+
+  return {
+    layout,
+    focusedPaneId: claudePane1,
+    panes: {
+      [serverPane]: createPaneData(),
+      [shellPane]: createPaneData(),
+      [claudePane1]: createPaneData(),
+      [claudePane2]: createPaneData(),
     },
   };
 }
@@ -199,7 +244,7 @@ export function getAllPaneIds(layout: PaneLayout): string[] {
 }
 
 // localStorage key for persisting pane state
-const PANE_STATE_KEY = "agent-os-pane-state";
+const PANE_STATE_KEY = "prodiusterm-pane-state";
 
 export function savePaneState(state: PaneState): void {
   try {

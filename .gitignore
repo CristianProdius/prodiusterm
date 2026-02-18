@@ -5,11 +5,13 @@ node_modules/
 dist/
 .next/
 out/
+src-tauri/server-bundle/
 
 # Environment
 .env
 .env.local
 .env*.local
+.env.signing
 
 # Python
 __pycache__/

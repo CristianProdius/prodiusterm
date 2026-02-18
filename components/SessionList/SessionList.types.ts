@@ -22,6 +22,7 @@ export interface SessionListProps {
     workingDirectory: string;
     ports?: number[];
   }) => Promise<void>;
+  onOpenWorkspace?: (projectId: string) => void;
 }
 
 export interface SessionHoverHandlers {

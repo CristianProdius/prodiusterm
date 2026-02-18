@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AgentOS",
-  description: "AI Agent Command Center",
+  title: "ProdiusTerm",
+  description: "Agentic Terminal Workspace",
   icons: {
     icon: "/icon.svg",
   },
