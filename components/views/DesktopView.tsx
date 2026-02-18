@@ -23,6 +23,8 @@ import {
 import { QuickSwitcher } from "@/components/QuickSwitcher";
 import type { ViewProps } from "./types";
 import { fileOpenActions } from "@/stores/fileOpen";
+import { WorkspaceSetupDialog } from "@/components/WorkspaceSetupDialog";
+import { WorktreePanel } from "@/components/WorktreePanel";
 
 export function DesktopView({
   sessions,
@@ -56,6 +58,12 @@ export function DesktopView({
   startDevServerProject,
   setStartDevServerProjectId,
   renderPane,
+  showWorkspaceSetup,
+  setShowWorkspaceSetup,
+  workspaceSetupProject,
+  handleOpenWorkspace,
+  handleApplyWorkspacePanes,
+  setupWorkspace,
 }: ViewProps) {
   return (
     <div className="bg-background flex h-dvh overflow-hidden">
@@ -81,8 +89,19 @@ export function DesktopView({
               onOpenTerminal={handleOpenTerminal}
               onStartDevServer={handleStartDevServer}
               onCreateDevServer={handleCreateDevServer}
+              onOpenWorkspace={handleOpenWorkspace}
             />
           </div>
+
+          {/* Worktree panel */}
+          {activeSession?.working_directory && (
+            <div className="border-border/30 border-t">
+              <WorktreePanel
+                projectDir={activeSession.working_directory}
+                projectName={activeSession.name}
+              />
+            </div>
+          )}
 
           {/* Sidebar footer with theme toggle */}
           <div className="mt-auto flex items-center justify-between px-3 py-1.5">
@@ -242,6 +261,16 @@ export function DesktopView({
           projectDevServers={startDevServerProject.devServers}
           onStart={handleCreateDevServer}
           onClose={() => setStartDevServerProjectId(null)}
+        />
+      )}
+      {workspaceSetupProject && (
+        <WorkspaceSetupDialog
+          open={showWorkspaceSetup}
+          onOpenChange={setShowWorkspaceSetup}
+          projectName={workspaceSetupProject.name}
+          projectDir={workspaceSetupProject.dir}
+          onSetup={setupWorkspace}
+          onApply={handleApplyWorkspacePanes}
         />
       )}
     </div>

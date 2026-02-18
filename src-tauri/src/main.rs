@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::net::TcpStream;
+use std::path::PathBuf;
 use std::process::{Child, Command};
 use std::sync::Mutex;
 use std::thread;
@@ -10,32 +11,126 @@ use tauri::Manager;
 
 struct ServerProcess(Mutex<Option<Child>>);
 
-fn start_server() -> Option<Child> {
-    let current_dir = std::env::current_dir().ok()?;
+/// Find a Node.js binary — Finder.app doesn't inherit shell PATH.
+fn find_node() -> String {
+    for path in [
+        "/opt/homebrew/bin/node",
+        "/usr/local/bin/node",
+        "/usr/bin/node",
+    ] {
+        if std::path::Path::new(path).exists() {
+            return path.to_string();
+        }
+    }
+    "node".to_string() // fallback to PATH lookup
+}
 
-    // If we're in src-tauri, go up to the project root
-    let project_root = if current_dir.ends_with("src-tauri") {
-        current_dir.parent()?.to_path_buf()
-    } else {
-        current_dir
+/// Find the project root directory containing server files.
+/// Strategy:
+/// 1. Check PRODIUSTERM_ROOT env var (explicit override)
+/// 2. Check relative to the executable (for dev mode: binary is in src-tauri/target/...)
+/// 3. Check current working directory
+/// 4. Check next to the executable's ancestor dirs (for bundled .app)
+fn find_project_root() -> Option<PathBuf> {
+    // 1. Explicit env var
+    if let Ok(root) = std::env::var("PRODIUSTERM_ROOT") {
+        let path = PathBuf::from(&root);
+        if path.join("server.ts").exists() || path.join("dist/server.js").exists() {
+            println!("Found project root via PRODIUSTERM_ROOT: {:?}", path);
+            return Some(path);
+        }
+    }
+
+    // 2. Walk up from the executable path (works in dev mode)
+    if let Ok(exe) = std::env::current_exe() {
+        let mut dir = exe.parent().map(|p| p.to_path_buf());
+        for _ in 0..10 {
+            if let Some(ref d) = dir {
+                if d.join("server.ts").exists() || d.join("dist/server.js").exists() {
+                    println!("Found project root relative to exe: {:?}", d);
+                    return Some(d.clone());
+                }
+                dir = d.parent().map(|p| p.to_path_buf());
+            } else {
+                break;
+            }
+        }
+    }
+
+    // 3. Current working directory
+    if let Ok(cwd) = std::env::current_dir() {
+        if cwd.join("server.ts").exists() || cwd.join("dist/server.js").exists() {
+            println!("Found project root via CWD: {:?}", cwd);
+            return Some(cwd);
+        }
+        // Also check parent (in case CWD is src-tauri)
+        if let Some(parent) = cwd.parent() {
+            if parent.join("server.ts").exists() || parent.join("dist/server.js").exists() {
+                println!("Found project root via CWD parent: {:?}", parent);
+                return Some(parent.to_path_buf());
+            }
+        }
+    }
+
+    // 4. For macOS .app bundles: check Resources dir for server-bundle
+    if let Ok(exe) = std::env::current_exe() {
+        // exe is at ProdiusTerm.app/Contents/MacOS/ProdiusTerm
+        // Resources would be at ProdiusTerm.app/Contents/Resources/
+        if let Some(macos_dir) = exe.parent() {
+            let resources_dir = macos_dir.parent()
+                .map(|contents| contents.join("Resources"));
+            if let Some(ref res) = resources_dir {
+                if res.join("server-bundle/server.js").exists() {
+                    println!("Found project root in Resources: {:?}", res);
+                    return Some(res.clone());
+                }
+            }
+        }
+    }
+
+    None
+}
+
+fn start_server() -> Option<Child> {
+    let project_root = match find_project_root() {
+        Some(root) => root,
+        None => {
+            eprintln!("Could not find project root with server files.");
+            eprintln!("Set PRODIUSTERM_ROOT env var to the project directory,");
+            eprintln!("or run from the project directory.");
+            return None;
+        }
     };
 
-    let server_path = project_root.join("dist/server.js");
+    let node = find_node();
+    let bundle_server = project_root.join("server-bundle/server.js");
 
-    // Check if we're in production (dist/server.js) or development
-    let (cmd, args, working_dir) = if server_path.exists() {
-        ("node", vec!["dist/server.js"], project_root)
+    // Priority: server-bundle (production .app) > dist/server.js > dev tsx
+    let (cmd, args, working_dir) = if bundle_server.exists() {
+        // Production: server-bundle inside .app Resources
+        (node.clone(), vec!["server-bundle/server.js".to_string()], project_root)
+    } else if project_root.join("dist/server.js").exists() {
+        (node.clone(), vec!["dist/server.js".to_string()], project_root)
     } else {
         // Development mode - run with tsx
-        ("npx", vec!["tsx", "server.ts"], project_root)
+        ("npx".to_string(), vec!["tsx".to_string(), "server.ts".to_string()], project_root)
     };
 
-    println!("Starting AgentOS server...");
+    println!("Starting ProdiusTerm server...");
     println!("Working dir: {:?}", working_dir);
+    println!("Command: {} {:?}", cmd, args);
 
-    let child = Command::new(cmd)
+    // Augment PATH so node/npx can be found when launched from Finder
+    let augmented_path = format!(
+        "/opt/homebrew/bin:/usr/local/bin:{}",
+        std::env::var("PATH").unwrap_or_default()
+    );
+
+    let child = Command::new(&cmd)
         .args(&args)
         .current_dir(&working_dir)
+        .env("NODE_ENV", "production")
+        .env("PATH", &augmented_path)
         .spawn()
         .ok()?;
 

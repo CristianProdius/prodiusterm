@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
+import os from "os";
 import { createSchema } from "./schema";
 import { runMigrations } from "./migrations";
 
@@ -8,7 +9,22 @@ import { runMigrations } from "./migrations";
 export * from "./types";
 export { queries } from "./queries";
 
-const DB_PATH = process.env.DB_PATH || path.join(process.cwd(), "agent-os.db");
+function getDefaultDbPath(): string {
+  const appName = "ProdiusTerm";
+  if (process.platform === "darwin") {
+    return path.join(
+      os.homedir(),
+      "Library",
+      "Application Support",
+      appName,
+      "agent-os.db"
+    );
+  }
+  // Linux: ~/.local/share/ProdiusTerm/
+  return path.join(os.homedir(), ".local", "share", appName, "agent-os.db");
+}
+
+const DB_PATH = process.env.DB_PATH || getDefaultDbPath();
 const LOCK_PATH = DB_PATH + ".init-lock";
 
 // Simple file-based lock for initialization
@@ -51,6 +67,9 @@ function withInitLock<T>(fn: () => T): T {
 // Initialize database with schema
 export function initDb(): Database.Database {
   return withInitLock(() => {
+    // Ensure the parent directory exists (e.g. ~/Library/Application Support/ProdiusTerm/)
+    fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+
     const db = new Database(DB_PATH, { timeout: 10000 });
 
     // Enable WAL mode for better concurrency

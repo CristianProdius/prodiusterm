@@ -2,6 +2,7 @@ import type { Session } from "@/lib/db";
 import type { ProjectWithDevServers } from "@/lib/projects";
 import type { NotificationSettings } from "@/lib/notifications";
 import type { TabData } from "@/lib/panes";
+import type { WorkspacePaneCommand } from "@/app/api/workspace/setup/route";
 
 export interface SessionStatus {
   sessionName: string;
@@ -63,4 +64,15 @@ export interface ViewProps {
 
   // Pane
   renderPane: (paneId: string) => React.ReactNode;
+
+  // Workspace setup
+  showWorkspaceSetup: boolean;
+  setShowWorkspaceSetup: (show: boolean) => void;
+  workspaceSetupProject: { name: string; dir: string } | null;
+  handleOpenWorkspace: (projectId: string) => void;
+  handleApplyWorkspacePanes: (panes: WorkspacePaneCommand[]) => void;
+  setupWorkspace: (projectDir: string) => Promise<{
+    panes: WorkspacePaneCommand[];
+    errors?: string[];
+  } | null>;
 }

@@ -1,9 +1,9 @@
 {
-  "name": "@saadnvd1/agent-os",
-  "version": "0.2.1",
-  "description": "Self-hosted web UI for managing Claude Code sessions",
+  "name": "@cristianprodius/prodiusterm",
+  "version": "0.3.0",
+  "description": "Agentic terminal workspace — auto-setup dev server, worktree panes with Claude Code, and extra tools in one window",
   "bin": {
-    "agent-os": "./scripts/agent-os"
+    "prodiusterm": "./scripts/agent-os"
   },
   "files": [
     "app/",
@@ -43,24 +43,26 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/saadnvd1/agent-os.git"
+    "url": "git+https://github.com/CristianProdius/prodiusterm.git"
   },
   "keywords": [
     "claude",
     "ai",
     "terminal",
     "tmux",
-    "agent"
+    "agent",
+    "worktree",
+    "workspace"
   ],
-  "author": "Saad Naveed",
+  "author": "Cristian Prodius",
   "license": "MIT",
   "engines": {
     "node": ">=20"
   },
   "bugs": {
-    "url": "https://github.com/saadnvd1/agent-os/issues"
+    "url": "https://github.com/CristianProdius/prodiusterm/issues"
   },
-  "homepage": "https://github.com/saadnvd1/agent-os#readme",
+  "homepage": "https://github.com/CristianProdius/prodiusterm#readme",
   "dependencies": {
     "@codemirror/lang-css": "^6.3.1",
     "@codemirror/lang-html": "^6.4.11",
@@ -68,6 +70,10 @@
     "@codemirror/lang-json": "^6.0.2",
     "@codemirror/lang-markdown": "^6.5.0",
     "@codemirror/lang-python": "^6.2.1",
+    "@codemirror/language": "^6.12.1",
+    "@codemirror/state": "^6.5.4",
+    "@codemirror/view": "^6.39.14",
+    "@lezer/highlight": "^1.2.3",
     "@modelcontextprotocol/sdk": "^1.25.2",
     "@monaco-editor/react": "^4.7.0",
     "@radix-ui/react-context-menu": "^2.2.16",
@@ -114,6 +120,7 @@
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@types/ws": "^8.18.1",
+    "esbuild": "^0.27.3",
     "eslint": "^9.39.2",
     "eslint-config-next": "^16.0.8",
     "husky": "^9.1.7",

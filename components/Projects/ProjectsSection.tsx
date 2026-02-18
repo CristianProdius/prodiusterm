@@ -44,6 +44,7 @@ interface ProjectsSectionProps {
   onViewDevServerLogs?: (serverId: string) => void;
   onHoverStart?: (session: Session, rect: DOMRect) => void;
   onHoverEnd?: () => void;
+  onOpenWorkspace?: (projectId: string) => void;
 }
 
 export function ProjectsSection({
@@ -75,6 +76,7 @@ export function ProjectsSection({
   onViewDevServerLogs,
   onHoverStart,
   onHoverEnd,
+  onOpenWorkspace,
 }: ProjectsSectionProps) {
   const { selectedIds } = useSnapshot(selectionStore);
   const isInSelectMode = selectedIds.size > 0;
@@ -189,6 +191,11 @@ export function ProjectsSection({
               onRename={
                 onRenameProject
                   ? (newName) => onRenameProject(project.id, newName)
+                  : undefined
+              }
+              onOpenWorkspace={
+                !project.is_uncategorized && onOpenWorkspace
+                  ? () => onOpenWorkspace(project.id)
                   : undefined
               }
             />

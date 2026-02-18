@@ -11,16 +11,17 @@ function debugLog(message: string) {
   const entry = `[${timestamp}] ${message}`;
   debugLogs.push(entry);
   if (debugLogs.length > MAX_DEBUG_LOGS) debugLogs.shift();
-  console.log(`[AgentOS] ${message}`);
+  console.log(`[ProdiusTerm] ${message}`);
 }
 
 // Expose to window for debugging
 if (typeof window !== "undefined") {
-  (window as unknown as { agentOSLogs: () => void }).agentOSLogs = () => {
-    console.log("=== AgentOS Debug Logs ===");
-    debugLogs.forEach((log) => console.log(log));
-    console.log("=== End Logs ===");
-  };
+  (window as unknown as { prodiusTermLogs: () => void }).prodiusTermLogs =
+    () => {
+      console.log("=== ProdiusTerm Debug Logs ===");
+      debugLogs.forEach((log) => console.log(log));
+      console.log("=== End Logs ===");
+    };
 }
 import { PaneProvider, usePanes } from "@/contexts/PaneContext";
 import { Pane } from "@/components/Pane";
@@ -37,6 +38,8 @@ import { getProvider } from "@/lib/providers";
 import { DesktopView } from "@/components/views/DesktopView";
 import { MobileView } from "@/components/views/MobileView";
 import { getPendingPrompt, clearPendingPrompt } from "@/stores/initialPrompt";
+import { useWorkspaceSetup } from "@/hooks/useWorkspaceSetup";
+import type { WorkspacePaneCommand } from "@/app/api/workspace/setup/route";
 
 function HomeContent() {
   // UI State
@@ -49,10 +52,23 @@ function HomeContent() {
     useState(false);
   const [showQuickSwitcher, setShowQuickSwitcher] = useState(false);
   const [copiedSessionId, setCopiedSessionId] = useState(false);
+  const [showWorkspaceSetup, setShowWorkspaceSetup] = useState(false);
+  const [workspaceSetupProject, setWorkspaceSetupProject] = useState<{
+    name: string;
+    dir: string;
+  } | null>(null);
   const terminalRefs = useRef<Map<string, TerminalHandle>>(new Map());
 
   // Pane context
-  const { focusedPaneId, attachSession, getActiveTab, addTab } = usePanes();
+  const {
+    focusedPaneId,
+    attachSession,
+    getActiveTab,
+    addTab,
+    splitHorizontal,
+    splitVertical,
+    state,
+  } = usePanes();
   const focusedActiveTab = getActiveTab(focusedPaneId);
   const { isMobile, isHydrated } = useViewport();
 
@@ -65,6 +81,7 @@ function HomeContent() {
     startDevServer,
     createDevServer,
   } = useDevServersManager();
+  const { setupWorkspace, checkWorkspaceConfig } = useWorkspaceSetup();
 
   // Helper to get init script command from API
   const getInitScriptCommand = useCallback(
@@ -226,7 +243,7 @@ function HomeContent() {
           `ERROR: No terminal available to attach session: ${session.name}`
         );
         alert(
-          `[AgentOS Debug] No terminal available!\n\nRun agentOSLogs() in console to see debug logs.`
+          `[ProdiusTerm Debug] No terminal available!\n\nRun prodiusTermLogs() in console to see debug logs.`
         );
         return;
       }
@@ -331,17 +348,39 @@ function HomeContent() {
     if (isHydrated && !isMobile) setSidebarOpen(true);
   }, [isMobile, isHydrated]);
 
-  // Keyboard shortcut: Cmd+K to open quick switcher
+  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+      const mod = e.metaKey || e.ctrlKey;
+      // Cmd+K: Quick switcher
+      if (mod && e.key === "k") {
         e.preventDefault();
         setShowQuickSwitcher(true);
+      }
+      // Cmd+D: Split vertical
+      if (mod && e.key === "d" && !e.shiftKey) {
+        e.preventDefault();
+        splitVertical(focusedPaneId);
+      }
+      // Cmd+Shift+D: Split horizontal
+      if (mod && e.shiftKey && e.key === "D") {
+        e.preventDefault();
+        splitHorizontal(focusedPaneId);
+      }
+      // Cmd+N: New session dialog
+      if (mod && e.key === "n" && !e.shiftKey) {
+        e.preventDefault();
+        setShowNewSessionDialog(true);
+      }
+      // Cmd+\\: Toggle sidebar
+      if (mod && e.key === "\\") {
+        e.preventDefault();
+        setSidebarOpen((prev) => !prev);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [focusedPaneId, splitVertical, splitHorizontal]);
 
   // Session selection handler
   const handleSelectSession = useCallback(
@@ -451,6 +490,50 @@ function HomeContent() {
     [projects, fetchSessions, attachToSession]
   );
 
+  // Workspace setup: check for .workspace.json when opening a project
+  const handleOpenWorkspace = useCallback(
+    async (projectId: string) => {
+      const project = projects.find((p) => p.id === projectId);
+      if (!project?.working_directory) return;
+
+      const config = await checkWorkspaceConfig(project.working_directory);
+      if (config) {
+        setWorkspaceSetupProject({
+          name: project.name,
+          dir: project.working_directory,
+        });
+        setShowWorkspaceSetup(true);
+      }
+    },
+    [projects, checkWorkspaceConfig]
+  );
+
+  // Apply workspace panes: send commands to terminals
+  const handleApplyWorkspacePanes = useCallback(
+    (panes: WorkspacePaneCommand[]) => {
+      // For each pane command, we send the command to the next available terminal
+      // We use a staggered approach so terminals have time to initialize
+      panes.forEach((pane, index) => {
+        setTimeout(() => {
+          const terminal = getTerminalWithFallback();
+          if (!terminal) return;
+
+          const { terminal: term } = terminal;
+          const cdCmd = `cd "${pane.cwd.replace(/^~/, "$HOME")}"`;
+
+          if (pane.role === "worktree") {
+            // Worktree panes: cd into worktree, then launch claude
+            term.sendCommand(`${cdCmd} && ${pane.command}`);
+          } else {
+            // Server/extra panes: cd into project dir, then run command
+            term.sendCommand(`${cdCmd} && ${pane.command}`);
+          }
+        }, index * 300);
+      });
+    },
+    [getTerminalWithFallback]
+  );
+
   // Active session and dev server project
   const activeSession = sessions.find(
     (s) => s.id === focusedActiveTab?.sessionId
@@ -492,6 +575,12 @@ function HomeContent() {
     startDevServerProject,
     setStartDevServerProjectId,
     renderPane,
+    showWorkspaceSetup,
+    setShowWorkspaceSetup,
+    workspaceSetupProject,
+    handleOpenWorkspace,
+    handleApplyWorkspacePanes,
+    setupWorkspace,
   };
 
   if (isMobile) {

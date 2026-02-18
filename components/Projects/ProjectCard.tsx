@@ -13,6 +13,7 @@ import {
   Pencil,
   FolderOpen,
   Terminal,
+  LayoutGrid,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -49,6 +50,7 @@ interface ProjectCardProps {
   onOpenInEditor?: () => void;
   onDelete?: () => void;
   onRename?: (newName: string) => void;
+  onOpenWorkspace?: () => void;
 }
 
 export function ProjectCard({
@@ -64,6 +66,7 @@ export function ProjectCard({
   onOpenInEditor,
   onDelete,
   onRename,
+  onOpenWorkspace,
 }: ProjectCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(project.name);
@@ -132,6 +135,12 @@ export function ProjectCard({
           <MenuItem onClick={() => onOpenTerminal()}>
             <Terminal className="mr-2 h-3 w-3" />
             Open terminal
+          </MenuItem>
+        )}
+        {onOpenWorkspace && (
+          <MenuItem onClick={() => onOpenWorkspace()}>
+            <LayoutGrid className="mr-2 h-3 w-3" />
+            Workspace setup
           </MenuItem>
         )}
         {onEdit && (
