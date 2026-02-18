@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import type { WorkspacePaneCommand } from "@/app/api/workspace/setup/route";
+import type { WorkspacePaneCommand } from "@/lib/workspace-config";
 import type { WorkspaceConfig } from "@/lib/workspace-config";
 
 interface WorkspaceSetupResult {
@@ -23,9 +23,14 @@ export function useWorkspaceSetup() {
         const res = await fetch(
           `/api/workspace?projectDir=${encodeURIComponent(projectDir)}`
         );
+        if (!res.ok) {
+          console.error("Failed to check workspace config:", res.status);
+          return null;
+        }
         const data = await res.json();
         return data.config || null;
-      } catch {
+      } catch (error) {
+        console.error("Workspace config check error:", error);
         return null;
       }
     },
@@ -75,9 +80,15 @@ export function useWorkspaceSetup() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ projectDir }),
         });
+        if (!res.ok) {
+          const data = await res.json();
+          console.error("Failed to create workspace template:", data.error);
+          return null;
+        }
         const data = await res.json();
         return data.configPath || null;
-      } catch {
+      } catch (error) {
+        console.error("Workspace template creation error:", error);
         return null;
       }
     },

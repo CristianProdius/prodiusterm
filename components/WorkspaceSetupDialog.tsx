@@ -17,7 +17,7 @@ import {
   Loader2,
   AlertCircle,
 } from "lucide-react";
-import type { WorkspacePaneCommand } from "@/app/api/workspace/setup/route";
+import type { WorkspacePaneCommand } from "@/lib/workspace-config";
 
 interface WorkspaceSetupDialogProps {
   open: boolean;
@@ -47,9 +47,12 @@ export function WorkspaceSetupDialog({
 
   const handleSetup = async () => {
     setLoading(true);
-    const setupResult = await onSetup(projectDir);
-    setResult(setupResult);
-    setLoading(false);
+    try {
+      const setupResult = await onSetup(projectDir);
+      setResult(setupResult);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleApply = () => {
@@ -137,7 +140,13 @@ export function WorkspaceSetupDialog({
         )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setResult(null);
+              onOpenChange(false);
+            }}
+          >
             Cancel
           </Button>
           {!result ? (

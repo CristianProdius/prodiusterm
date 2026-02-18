@@ -31,6 +31,13 @@ export interface WorkspaceConfig {
   extras?: WorkspaceExtraConfig[];
 }
 
+export interface WorkspacePaneCommand {
+  role: "server" | "worktree" | "extra" | "shell";
+  name: string;
+  command: string;
+  cwd: string;
+}
+
 const WORKSPACE_CONFIG_FILE = ".workspace.json";
 
 /**
@@ -98,6 +105,14 @@ function validateWorkspaceConfig(
   }
 
   return result;
+}
+
+/**
+ * Check if .workspace.json exists in a project directory
+ */
+export function workspaceConfigExists(projectDir: string): boolean {
+  const resolvedDir = resolvePath(projectDir);
+  return fs.existsSync(path.join(resolvedDir, WORKSPACE_CONFIG_FILE));
 }
 
 /**

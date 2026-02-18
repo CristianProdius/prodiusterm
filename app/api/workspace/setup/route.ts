@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readWorkspaceConfig } from "@/lib/workspace-config";
+import {
+  readWorkspaceConfig,
+  type WorkspacePaneCommand,
+} from "@/lib/workspace-config";
 import {
   createWorktree,
   listWorktrees,
@@ -7,12 +10,8 @@ import {
 } from "@/lib/worktrees";
 import { isGitRepo, branchExists } from "@/lib/git";
 
-export interface WorkspacePaneCommand {
-  role: "server" | "worktree" | "extra" | "shell";
-  name: string;
-  command: string;
-  cwd: string;
-}
+// Re-export so existing consumers don't break
+export type { WorkspacePaneCommand } from "@/lib/workspace-config";
 
 /**
  * POST /api/workspace/setup
@@ -36,6 +35,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const resolvedDir = projectDir.replace(/^~/, process.env.HOME || "~");
     const panes: WorkspacePaneCommand[] = [];
     const errors: string[] = [];
 
@@ -45,13 +45,12 @@ export async function POST(request: NextRequest) {
         role: "server",
         name: "Dev Server",
         command: config.server.command,
-        cwd: projectDir,
+        cwd: resolvedDir,
       });
     }
 
     // 2. Worktree panes
     if (config.worktrees && config.worktrees.length > 0) {
-      const resolvedDir = projectDir.replace(/^~/, process.env.HOME || "~");
       const isRepo = await isGitRepo(resolvedDir);
 
       if (!isRepo) {
@@ -60,7 +59,7 @@ export async function POST(request: NextRequest) {
         );
       } else {
         // Get existing worktrees
-        const existingWorktrees = await listWorktrees(projectDir);
+        const existingWorktrees = await listWorktrees(resolvedDir);
         const existingBranches = new Set(
           existingWorktrees.map((wt) => wt.branch)
         );
@@ -86,9 +85,9 @@ export async function POST(request: NextRequest) {
             // Create new worktree
             try {
               const worktreeInfo: WorktreeInfo = await createWorktree({
-                projectPath: projectDir,
+                projectPath: resolvedDir,
                 featureName: wt.name,
-                baseBranch: "main",
+                branchName: wt.branch,
               });
 
               panes.push({
@@ -112,7 +111,7 @@ export async function POST(request: NextRequest) {
                   role: "worktree",
                   name: wt.name,
                   command: "claude",
-                  cwd: projectDir,
+                  cwd: resolvedDir,
                 });
               }
             }
@@ -128,7 +127,7 @@ export async function POST(request: NextRequest) {
           role: "extra",
           name: extra.name,
           command: extra.command,
-          cwd: projectDir,
+          cwd: resolvedDir,
         });
       }
     }

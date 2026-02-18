@@ -18,6 +18,11 @@ pnpm rebuild node-pty better-sqlite3
 echo "--- Building Next.js (standalone) ---"
 pnpm build
 
+if [ ! -d ".next/standalone" ]; then
+  echo "ERROR: .next/standalone/ not found. Ensure next.config.ts has output: 'standalone'"
+  exit 1
+fi
+
 # 3. Compile server.ts with esbuild
 echo "--- Compiling server.ts ---"
 pnpm exec esbuild server.ts --bundle --platform=node --target=node20 \
@@ -57,18 +62,28 @@ fi
 if [ -d "node_modules/node-pty" ]; then
   rm -rf "$BUNDLE_DIR/node_modules/node-pty"
   mkdir -p "$BUNDLE_DIR/node_modules/node-pty"
-  rsync -a --copy-links --ignore-errors node_modules/node-pty/ "$BUNDLE_DIR/node_modules/node-pty/" || true
+  rsync -a --copy-links node_modules/node-pty/ "$BUNDLE_DIR/node_modules/node-pty/"
 fi
 
 # better-sqlite3
 if [ -d "node_modules/better-sqlite3" ]; then
   rm -rf "$BUNDLE_DIR/node_modules/better-sqlite3"
   mkdir -p "$BUNDLE_DIR/node_modules/better-sqlite3"
-  rsync -a --copy-links --ignore-errors node_modules/better-sqlite3/ "$BUNDLE_DIR/node_modules/better-sqlite3/" || true
+  rsync -a --copy-links node_modules/better-sqlite3/ "$BUNDLE_DIR/node_modules/better-sqlite3/"
 fi
 
 # Final cleanup — remove any broken symlinks that slipped through
 find "$BUNDLE_DIR" -type l -delete 2>/dev/null || true
+
+# Verify critical native modules are present
+if ! find "$BUNDLE_DIR/node_modules/node-pty" -name "*.node" | grep -q .; then
+  echo "ERROR: node-pty native binary (.node) not found in bundle"
+  exit 1
+fi
+if ! find "$BUNDLE_DIR/node_modules/better-sqlite3" -name "*.node" | grep -q .; then
+  echo "ERROR: better-sqlite3 native binary (.node) not found in bundle"
+  exit 1
+fi
 
 # 5. Ad-hoc sign all .node native binaries (required before Tauri bundles them)
 echo "--- Signing native binaries ---"

@@ -39,7 +39,7 @@ import { DesktopView } from "@/components/views/DesktopView";
 import { MobileView } from "@/components/views/MobileView";
 import { getPendingPrompt, clearPendingPrompt } from "@/stores/initialPrompt";
 import { useWorkspaceSetup } from "@/hooks/useWorkspaceSetup";
-import type { WorkspacePaneCommand } from "@/app/api/workspace/setup/route";
+import type { WorkspacePaneCommand } from "@/lib/workspace-config";
 
 function HomeContent() {
   // UI State
@@ -508,30 +508,58 @@ function HomeContent() {
     [projects, checkWorkspaceConfig]
   );
 
-  // Apply workspace panes: send commands to terminals
+  // Apply workspace panes: create a split for each pane and send its command
   const handleApplyWorkspacePanes = useCallback(
     (panes: WorkspacePaneCommand[]) => {
-      // For each pane command, we send the command to the next available terminal
-      // We use a staggered approach so terminals have time to initialize
-      panes.forEach((pane, index) => {
+      if (panes.length === 0) return;
+
+      const sendPaneCommand = (
+        term: TerminalHandle,
+        pane: WorkspacePaneCommand
+      ) => {
+        const cdCmd = `cd "${pane.cwd.replace(/^~/, "$HOME")}"`;
+        term.sendCommand(`${cdCmd} && ${pane.command}`);
+      };
+
+      // Send first pane command to the currently focused terminal
+      const current = getTerminalWithFallback();
+      if (!current) return;
+      sendPaneCommand(current.terminal, panes[0]);
+
+      // For remaining panes, split and wait for the new terminal to register
+      const remaining = panes.slice(1);
+      let delay = 0;
+
+      for (const pane of remaining) {
+        delay += 300;
         setTimeout(() => {
-          const terminal = getTerminalWithFallback();
-          if (!terminal) return;
+          const existingKeys = new Set(terminalRefs.current.keys());
+          splitVertical(focusedPaneId);
 
-          const { terminal: term } = terminal;
-          const cdCmd = `cd "${pane.cwd.replace(/^~/, "$HOME")}"`;
-
-          if (pane.role === "worktree") {
-            // Worktree panes: cd into worktree, then launch claude
-            term.sendCommand(`${cdCmd} && ${pane.command}`);
-          } else {
-            // Server/extra panes: cd into project dir, then run command
-            term.sendCommand(`${cdCmd} && ${pane.command}`);
-          }
-        }, index * 300);
-      });
+          let attempts = 0;
+          const maxAttempts = 20;
+          const waitForNewTerminal = () => {
+            attempts++;
+            for (const key of terminalRefs.current.keys()) {
+              if (!existingKeys.has(key)) {
+                const terminal = terminalRefs.current.get(key);
+                if (terminal) {
+                  sendPaneCommand(terminal, pane);
+                  return;
+                }
+              }
+            }
+            if (attempts < maxAttempts) {
+              setTimeout(waitForNewTerminal, 50);
+            } else {
+              debugLog(`Failed to find new terminal for pane "${pane.name}"`);
+            }
+          };
+          setTimeout(waitForNewTerminal, 50);
+        }, delay);
+      }
     },
-    [getTerminalWithFallback]
+    [getTerminalWithFallback, splitVertical, focusedPaneId]
   );
 
   // Active session and dev server project

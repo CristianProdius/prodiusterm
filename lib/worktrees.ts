@@ -10,6 +10,7 @@ import * as os from "os";
 import {
   isGitRepo,
   branchExists,
+  getDefaultBranch,
   getRepoName,
   slugify,
   generateBranchName,
@@ -31,6 +32,7 @@ export interface WorktreeInfo {
 export interface CreateWorktreeOptions {
   projectPath: string;
   featureName: string;
+  branchName?: string;
   baseBranch?: string;
 }
 
@@ -65,7 +67,12 @@ function generateWorktreeDirName(
 export async function createWorktree(
   options: CreateWorktreeOptions
 ): Promise<WorktreeInfo> {
-  const { projectPath, featureName, baseBranch = "main" } = options;
+  const {
+    projectPath,
+    featureName,
+    branchName: explicitBranch,
+    baseBranch,
+  } = options;
 
   const resolvedProjectPath = resolvePath(projectPath);
 
@@ -74,8 +81,12 @@ export async function createWorktree(
     throw new Error(`Not a git repository: ${projectPath}`);
   }
 
-  // Generate branch name
-  const branchName = generateBranchName(featureName);
+  // Use explicit branch name from config, or generate one from feature name
+  const branchName = explicitBranch || generateBranchName(featureName);
+
+  // Detect default branch if not specified
+  const resolvedBaseBranch =
+    baseBranch || (await getDefaultBranch(resolvedProjectPath));
 
   // Check if branch already exists
   if (await branchExists(resolvedProjectPath, branchName)) {
@@ -98,9 +109,9 @@ export async function createWorktree(
   // Create the worktree with a new branch
   // Try multiple ref formats to avoid "ambiguous refname" errors
   const refFormats = [
-    `origin/${baseBranch}`, // Try remote first (most explicit)
-    `refs/heads/${baseBranch}`, // Then local branch
-    baseBranch, // Finally, bare name as fallback
+    `origin/${resolvedBaseBranch}`, // Try remote first (most explicit)
+    `refs/heads/${resolvedBaseBranch}`, // Then local branch
+    resolvedBaseBranch, // Finally, bare name as fallback
   ];
 
   let lastError: Error | null = null;
@@ -125,7 +136,7 @@ export async function createWorktree(
   return {
     worktreePath,
     branchName,
-    baseBranch,
+    baseBranch: resolvedBaseBranch,
     projectPath: resolvedProjectPath,
     projectName,
   };

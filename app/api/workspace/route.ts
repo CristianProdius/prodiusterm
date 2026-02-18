@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   readWorkspaceConfig,
   writeWorkspaceTemplate,
+  workspaceConfigExists,
 } from "@/lib/workspace-config";
 
 /**
@@ -32,6 +33,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "projectDir is required" },
         { status: 400 }
+      );
+    }
+
+    if (workspaceConfigExists(projectDir)) {
+      return NextResponse.json(
+        { error: ".workspace.json already exists" },
+        { status: 409 }
       );
     }
 

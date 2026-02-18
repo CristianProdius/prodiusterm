@@ -2,7 +2,7 @@ import type { Session } from "@/lib/db";
 import type { ProjectWithDevServers } from "@/lib/projects";
 import type { NotificationSettings } from "@/lib/notifications";
 import type { TabData } from "@/lib/panes";
-import type { WorkspacePaneCommand } from "@/app/api/workspace/setup/route";
+import type { WorkspacePaneCommand } from "@/lib/workspace-config";
 
 export interface SessionStatus {
   sessionName: string;

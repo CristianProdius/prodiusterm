@@ -106,14 +106,14 @@ fn start_server() -> Option<Child> {
     let bundle_server = project_root.join("server-bundle/server.js");
 
     // Priority: server-bundle (production .app) > dist/server.js > dev tsx
-    let (cmd, args, working_dir) = if bundle_server.exists() {
+    let (cmd, args, working_dir, is_production) = if bundle_server.exists() {
         // Production: server-bundle inside .app Resources
-        (node.clone(), vec!["server-bundle/server.js".to_string()], project_root)
+        (node.clone(), vec!["server-bundle/server.js".to_string()], project_root, true)
     } else if project_root.join("dist/server.js").exists() {
-        (node.clone(), vec!["dist/server.js".to_string()], project_root)
+        (node.clone(), vec!["dist/server.js".to_string()], project_root, true)
     } else {
         // Development mode - run with tsx
-        ("npx".to_string(), vec!["tsx".to_string(), "server.ts".to_string()], project_root)
+        ("npx".to_string(), vec!["tsx".to_string(), "server.ts".to_string()], project_root, false)
     };
 
     println!("Starting ProdiusTerm server...");
@@ -126,10 +126,12 @@ fn start_server() -> Option<Child> {
         std::env::var("PATH").unwrap_or_default()
     );
 
+    let node_env = if is_production { "production" } else { "development" };
+
     let child = Command::new(&cmd)
         .args(&args)
         .current_dir(&working_dir)
-        .env("NODE_ENV", "production")
+        .env("NODE_ENV", node_env)
         .env("PATH", &augmented_path)
         .spawn()
         .ok()?;
