@@ -2,54 +2,66 @@ import SwiftUI
 
 struct ContentView: View {
     @Environment(AppState.self) private var appState
-    @State private var terminalManager = TerminalSessionManager()
+    @Environment(\.openWindow) private var openWindow
+    @State private var showNewProjectSheet = false
 
     var body: some View {
-        NavigationSplitView(columnVisibility: .constant(.all)) {
-            SidebarView()
-                .navigationSplitViewColumnWidth(min: 200, ideal: 260, max: 400)
-        } detail: {
-            if let session = appState.selectedSession {
-                TerminalContainerView(
-                    session: session,
-                    terminalManager: terminalManager
-                )
-            } else {
-                WelcomeView()
+        NavigationStack {
+            List {
+                ForEach(sortedProjects, id: \.id) { project in
+                    Button {
+                        openWindow(id: "project", value: project.id)
+                    } label: {
+                        ProjectRow(project: project)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .navigationTitle("Projects")
+            .toolbar {
+                ToolbarItemGroup {
+                    Button {
+                        showNewProjectSheet = true
+                    } label: {
+                        Image(systemName: "folder.badge.plus")
+                    }
+                    .help("New Project")
+                }
+            }
+            .sheet(isPresented: $showNewProjectSheet) {
+                NewProjectSheet { project in
+                    openWindow(id: "project", value: project.id)
+                }
             }
         }
-        .navigationSplitViewStyle(.balanced)
+    }
+    
+    private var sortedProjects: [Project] {
+        appState.projects.sorted { a, b in
+            if a.isUncategorized != b.isUncategorized {
+                return !a.isUncategorized
+            }
+            return a.sortOrder < b.sortOrder
+        }
     }
 }
 
-struct WelcomeView: View {
-    @Environment(AppState.self) private var appState
+struct ProjectRow: View {
+    let project: Project
 
     var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "terminal")
-                .font(.system(size: 64))
+        HStack(spacing: 10) {
+            Image(systemName: project.isUncategorized ? "tray" : "folder")
                 .foregroundStyle(.secondary)
-
-            Text("ProdiusTerm")
-                .font(.largeTitle)
-                .fontWeight(.semibold)
-
-            Text("Create a new session to get started")
-                .foregroundStyle(.secondary)
-
-            Button("New Session") {
-                Task {
-                    _ = await appState.createSession(
-                        name: "New Session",
-                        projectId: appState.selectedProject?.id
-                    )
-                }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(project.name)
+                    .fontWeight(.medium)
+                Text(project.workingDirectory)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
             }
-            .keyboardShortcut("t", modifiers: .command)
-            .controlSize(.large)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.background)
+        .padding(.vertical, 4)
     }
 }

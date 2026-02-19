@@ -1,10 +1,16 @@
 import SwiftUI
+import AppKit
 
 struct NewProjectSheet: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
+    let onCreate: ((Project) -> Void)?
     @State private var name = ""
     @State private var workingDirectory = ""
+
+    init(onCreate: ((Project) -> Void)? = nil) {
+        self.onCreate = onCreate
+    }
 
     var body: some View {
         VStack(spacing: 20) {
@@ -32,10 +38,12 @@ struct NewProjectSheet: View {
 
                 Button("Create") {
                     Task {
-                        _ = await appState.createProject(
+                        if let project = await appState.createProject(
                             name: name,
                             workingDirectory: workingDirectory
-                        )
+                        ) {
+                            onCreate?(project)
+                        }
                         dismiss()
                     }
                 }

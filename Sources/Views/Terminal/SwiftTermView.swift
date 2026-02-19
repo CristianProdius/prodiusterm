@@ -4,9 +4,10 @@ import AppKit
 
 /// NSViewRepresentable wrapper for SwiftTerm's LocalProcessTerminalView
 struct SwiftTermView: NSViewRepresentable {
-    let session: Session
-    @ObservedObject var terminalManager: TerminalSessionManager
+    let terminal: ProjectTerminal
+    let terminalManager: TerminalSessionManager
     let theme: TerminalTheme
+    let fontSize: CGFloat
 
     func makeNSView(context: Context) -> LocalProcessTerminalView {
         let terminalView = LocalProcessTerminalView(frame: .zero)
@@ -16,38 +17,26 @@ struct SwiftTermView: NSViewRepresentable {
         applyTheme(to: terminalView, theme: theme)
 
         // Set font
-        terminalView.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+        terminalView.font = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
 
         // Get or create terminal instance
-        let instance = terminalManager.terminal(for: session.id)
+        let instance = terminalManager.terminal(for: terminal.id)
             ?? terminalManager.createTerminal(
-                sessionId: session.id,
-                workingDirectory: session.workingDirectory
+                terminalId: terminal.id,
+                workingDirectory: terminal.workingDirectory,
+                shell: terminal.shell,
+                command: terminal.resolvedCommand,
+                envOverrides: terminal.envOverrides
             )
 
-        // Start the shell process
-        let shellPath = instance.shell
-        let cwd = instance.workingDirectory
-        let env = instance.environment
-
-        terminalView.startProcess(
-            executable: shellPath,
-            args: [],
-            environment: env,
-            execName: "-" + (shellPath as NSString).lastPathComponent // Login shell
-        )
-
-        // Set initial working directory
-        if cwd != "/" && cwd != ProcessInfo.processInfo.environment["HOME"] {
-            let escapedPath = cwd.replacingOccurrences(of: "'", with: "'\\''")
-            terminalView.send(txt: "cd '\(escapedPath)'\r")
-        }
+        instance.startIfNeeded(on: terminalView)
 
         return terminalView
     }
 
     func updateNSView(_ terminalView: LocalProcessTerminalView, context: Context) {
         applyTheme(to: terminalView, theme: theme)
+        terminalView.font = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
     }
 
     func makeCoordinator() -> Coordinator {

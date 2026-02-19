@@ -248,6 +248,43 @@ final class DatabaseManager: Sendable {
             try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_project_repositories_project ON project_repositories(project_id)")
         }
 
+        // Project terminals (layout + configuration)
+        migrator.registerMigration("v15_project_terminals") { db in
+            try db.create(table: "project_terminals", ifNotExists: true) { t in
+                t.primaryKey("id", .text)
+                t.column("project_id", .text).notNull().references("projects", onDelete: .cascade)
+                t.column("title", .text).notNull()
+                t.column("kind", .text).notNull().defaults(to: "shell")
+                t.column("working_directory", .text).notNull().defaults(to: "")
+                t.column("shell", .text)
+                t.column("command", .text)
+                t.column("agent_type", .text)
+                t.column("env_json", .text)
+                t.column("sort_order", .integer).notNull().defaults(to: 0)
+                t.column("auto_start", .integer).notNull().defaults(to: 1)
+                t.column("created_at", .text).notNull().defaults(sql: "(datetime('now'))")
+                t.column("updated_at", .text).notNull().defaults(sql: "(datetime('now'))")
+            }
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_project_terminals_project ON project_terminals(project_id)")
+        }
+
+        migrator.registerMigration("v16_project_terminal_layouts") { db in
+            try db.create(table: "project_terminal_layouts", ifNotExists: true) { t in
+                t.primaryKey("id", .text)
+                t.column("project_id", .text).notNull().references("projects", onDelete: .cascade)
+                t.column("terminal_id", .text).notNull().references("project_terminals", onDelete: .cascade)
+                t.column("x", .double).notNull().defaults(to: 0)
+                t.column("y", .double).notNull().defaults(to: 0)
+                t.column("width", .double).notNull().defaults(to: 0.5)
+                t.column("height", .double).notNull().defaults(to: 0.5)
+                t.column("z_index", .integer).notNull().defaults(to: 0)
+                t.column("is_hidden", .integer).notNull().defaults(to: 0)
+                t.column("updated_at", .text).notNull().defaults(sql: "(datetime('now'))")
+            }
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_terminal_layouts_project ON project_terminal_layouts(project_id)")
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_terminal_layouts_terminal ON project_terminal_layouts(terminal_id)")
+        }
+
         return migrator
     }
 
@@ -370,6 +407,55 @@ final class DatabaseManager: Sendable {
     func fetchAllGroups() throws -> [Group] {
         try dbPool.read { db in
             try Group.order(Group.Columns.sortOrder.asc).fetchAll(db)
+        }
+    }
+
+    // MARK: - Project Terminal Queries
+
+    func fetchProjectTerminals(forProject projectId: String) throws -> [ProjectTerminal] {
+        try dbPool.read { db in
+            try ProjectTerminal
+                .filter(ProjectTerminal.Columns.projectId == projectId)
+                .order(ProjectTerminal.Columns.sortOrder.asc)
+                .fetchAll(db)
+        }
+    }
+
+    func insertProjectTerminal(_ terminal: ProjectTerminal) throws {
+        try dbPool.write { db in
+            try terminal.insert(db)
+        }
+    }
+
+    func updateProjectTerminal(_ terminal: ProjectTerminal) throws {
+        try dbPool.write { db in
+            try terminal.update(db)
+        }
+    }
+
+    func deleteProjectTerminal(id: String) throws {
+        try dbPool.write { db in
+            _ = try ProjectTerminal.deleteOne(db, key: id)
+        }
+    }
+
+    func fetchProjectTerminalLayouts(forProject projectId: String) throws -> [ProjectTerminalLayout] {
+        try dbPool.read { db in
+            try ProjectTerminalLayout
+                .filter(ProjectTerminalLayout.Columns.projectId == projectId)
+                .fetchAll(db)
+        }
+    }
+
+    func upsertProjectTerminalLayout(_ layout: ProjectTerminalLayout) throws {
+        try dbPool.write { db in
+            try layout.insert(db, onConflict: .replace)
+        }
+    }
+
+    func deleteProjectTerminalLayout(id: String) throws {
+        try dbPool.write { db in
+            _ = try ProjectTerminalLayout.deleteOne(db, key: id)
         }
     }
 }
